@@ -3,5 +3,7 @@ name = "socksv5"
 version = "0.1.0"
 authors = ["Alexandre Kirszenberg <alex@kirszenberg.com>"]
 edition = "2018"
+description = "SOCKS v4a and v5 server implementation"
+license = "MIT OR Apache-2.0"
 
 [dependencies]
