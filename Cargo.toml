@@ -1,0 +1,7 @@
+[package]
+name = "socksv5"
+version = "0.1.0"
+authors = ["Alexandre Kirszenberg <alex@kirszenberg.com>"]
+edition = "2018"
+
+[dependencies]
