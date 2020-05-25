@@ -1,0 +1,13 @@
+[package]
+name = "proxy"
+version = "0.1.0"
+authors = ["Alexandre Kirszenberg <alexandre.kirszenberg@epita.fr>"]
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0.31"
+futures = "0.3.5"
+async-std = "1.6.0"
+socksv5 = { path = "../.." }
+log = "0.4.8"
+env_logger = "0.7.1"
