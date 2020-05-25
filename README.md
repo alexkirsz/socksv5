@@ -5,11 +5,11 @@ application. See [examples/proxy](examples/proxy) for an example use case.
 
 ## TODO
 
-[] Documentation.
-[] Tests.
-[] Client-side message parsing.
-[] Username/password and GSSAPI authentication methods.
-[] Sync API.
+- [ ] Documentation.
+- [ ] Tests.
+- [ ] Client-side message parsing.
+- [ ] Username/password and GSSAPI authentication methods.
+- [ ] Sync API.
 
 #### License
 
