@@ -1,5 +1,8 @@
+#[cfg(not(feature = "tokio"))]
 use futures::io::{AsyncRead, AsyncReadExt};
 use thiserror::Error;
+#[cfg(feature = "tokio")]
+use tokio_compat::io::{AsyncRead, AsyncReadExt};
 
 pub mod v4;
 pub mod v5;

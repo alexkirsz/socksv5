@@ -1,6 +1,9 @@
 use byteorder::{BigEndian, ByteOrder};
-use futures::prelude::*;
+#[cfg(not(feature = "tokio"))]
+use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use thiserror::Error;
+#[cfg(feature = "tokio")]
+use tokio_compat::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 mod types;
 

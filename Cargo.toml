@@ -6,8 +6,17 @@ edition = "2018"
 description = "SOCKS v4a and v5 basic building blocks to build your own async SOCKS application"
 license = "MIT OR Apache-2.0"
 keywords = ["SOCKS", "SOCKS4a", "SOCKS5", "proxy", "async"]
+repository = "https://github.com/alexkirsz/socksv5"
+
+[features]
+default = ["futures"]
+tokio = ["tokio_compat"]
 
 [dependencies]
-futures = "0.3.5"
-thiserror = "1.0.19"
+thiserror = "1.0.22"
 byteorder = "1.3.4"
+futures = { version = "0.3.8", optional = true }
+tokio_compat = { package = "tokio", version = "1.0.2", optional = true, features = [
+  "macros",
+  "io-util"
+] }

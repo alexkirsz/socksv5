@@ -3,12 +3,20 @@
 SOCKS v4a and v5 basic building blocks to build your own async SOCKS
 application. See [examples/proxy](examples/proxy) for an example use case.
 
+## Futures
+
+This library supports futures 0.3 async traits by default.
+
+Tokio 1 async traits support can be enabled with the `tokio`
+feature. In that case, set `default-features = false` to avoid pulling in
+the `futures` crate.
+
 ## TODO
 
-- [ ] Documentation.
-- [ ] Tests.
 - [ ] Client-side message parsing.
 - [ ] Username/password and GSSAPI authentication methods.
+- [ ] Documentation.
+- [ ] Tests.
 - [ ] Sync API.
 
 #### License
