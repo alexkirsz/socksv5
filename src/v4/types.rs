@@ -24,7 +24,7 @@ impl SocksV4Command {
 #[derive(Debug, Eq, PartialEq)]
 pub enum SocksV4RequestStatus {
     Granted,
-    // Also known as Refused
+    /// Also known as Refused
     Failed,
     IdentdFailed,
     WrongUserid,
