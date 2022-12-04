@@ -100,6 +100,36 @@ where
     writer.write_all(&data).await
 }
 
+pub type SocksV5AuthMethodResult = Result<SocksV5AuthMethod, SocksV5HandshakeError>;
+
+/// Reads a SOCKSv5 "METHOD selection message", verifying the protocol version
+/// and returning the authentication method selected by the server.
+///
+/// This function consumes from 0 to 2 bytes from `reader`, depending on the data and errors.
+/// When the result is successful, it will have consumed exactly 2 bytes.
+///
+/// # Errors
+///
+/// If reading from `reader` fails, including if a premature EOF is encountered,
+/// this function will return the I/O error (wrapped in `SocksV5HandshakeError::Io`).
+///
+/// If the first byte read from `reader` is not `05`, as required by the SOCKSv5 specification,
+/// then this function will return `SocksV5HandshakeError::InvalidVersion` with the actual "version number".
+pub async fn read_auth_method<Reader>(mut reader: Reader) -> SocksV5AuthMethodResult
+where
+    Reader: AsyncRead + Unpin,
+{
+    let mut data = [0u8];
+    // read protocol version
+    reader.read_exact(&mut data).await?;
+    if data[0] != SocksVersion::V5.to_u8() {
+        return Err(SocksV5HandshakeError::InvalidVersion(data[0]));
+    }
+    // read selected auth method
+    reader.read_exact(&mut data).await?;
+    Ok(SocksV5AuthMethod::from_u8(data[0]))
+}
+
 pub async fn write_auth_method<Writer>(
     mut writer: Writer,
     status: SocksV5AuthMethod,
