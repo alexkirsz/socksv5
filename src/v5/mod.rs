@@ -420,3 +420,79 @@ where
     writer.write_all(&buf).await?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use futures::executor::block_on;
+
+    use super::*;
+
+    #[test]
+    fn write_handshake_good() {
+        let mut buf = Vec::<u8>::new();
+        block_on(write_handshake(&mut buf, [SocksV5AuthMethod::Noauth])).unwrap();
+        assert_eq!(buf, &[0x05, 0x01, 0x00]);
+    }
+
+    #[test]
+    fn read_auth_method_good() {
+        assert_eq!(
+            block_on(read_auth_method([0x05u8, 0x00].as_slice())).unwrap(),
+            SocksV5AuthMethod::Noauth
+        );
+    }
+
+    #[test]
+    fn write_request_ipv4() {
+        let mut buf = Vec::<u8>::new();
+        block_on(write_request(
+            &mut buf,
+            SocksV5Command::Connect,
+            SocksV5Host::Ipv4([127, 0, 0, 1]),
+            1080,
+        ))
+        .unwrap();
+        assert_eq!(buf, &[5, 1, 0, 1, 127, 0, 0, 1, 4, 56]);
+    }
+
+    #[test]
+    fn write_request_ipv6() {
+        let mut buf = Vec::<u8>::new();
+        block_on(write_request(
+            &mut buf,
+            SocksV5Command::Connect,
+            SocksV5Host::Ipv6([1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6]),
+            1080,
+        ))
+        .unwrap();
+        assert_eq!(
+            buf,
+            &[5, 1, 0, 4, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 4, 56]
+        );
+    }
+
+    #[test]
+    fn write_request_domain() {
+        let mut buf = Vec::<u8>::new();
+        block_on(write_request(
+            &mut buf,
+            SocksV5Command::Connect,
+            SocksV5Host::Domain("A".into()),
+            1080,
+        ))
+        .unwrap();
+        assert_eq!(buf, &[5, 1, 0, 3, 1, 65, 4, 56]);
+    }
+
+    #[test]
+    fn read_request_status_good() {
+        let data = [5, 0, 0, 1, 127, 0, 0, 1, 4, 56];
+        let response = block_on(read_request_status(data.as_slice())).unwrap();
+        assert_eq!(response.status, SocksV5RequestStatus::Success);
+        match response.host {
+            SocksV5Host::Ipv4(ip) => assert_eq!(ip, [127, 0, 0, 1]),
+            _ => panic!("parsed host was not IPv4 as expected"),
+        }
+        assert_eq!(response.port, 1080);
+    }
+}
