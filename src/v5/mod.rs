@@ -205,18 +205,18 @@ where
     let idx = match &host {
         SocksV5Host::Ipv4(ip) => {
             buf[3] = SocksV5AddressType::Ipv4.to_u8();
-            buf[4..8].clone_from_slice(ip);
+            buf[4..8].copy_from_slice(ip);
             8
         }
         SocksV5Host::Ipv6(ip) => {
             buf[3] = SocksV5AddressType::Ipv6.to_u8();
-            buf[4..20].clone_from_slice(ip);
+            buf[4..20].copy_from_slice(ip);
             20
         }
         SocksV5Host::Domain(d) => {
             buf[3] = SocksV5AddressType::Domain.to_u8();
             buf[4] = d.len() as u8;
-            buf[5..5 + d.len()].clone_from_slice(d);
+            buf[5..5 + d.len()].copy_from_slice(d);
             5 + d.len()
         }
     };
