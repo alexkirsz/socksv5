@@ -189,7 +189,7 @@ where
     reader.read_exact(&mut command).await?;
     let command = SocksV5Command::from_u8(command[0]).ok_or_else(|| {
         SocksV5RequestError::InvalidRequest(format!(
-            "invalid command {:02X}, expected {:02X} (CONNECT), {:02X} (BIND), or  {:02X} (UDP ASSOCIATE)",
+            "invalid command {:02X}, expected {:02X} (CONNECT), {:02X} (BIND), or {:02X} (UDP ASSOCIATE)",
             command[0],
             SocksV5Command::Bind.to_u8(),
             SocksV5Command::Connect.to_u8(),
@@ -299,6 +299,84 @@ where
     NetworkEndian::write_u16(&mut data[port_start..], port);
 
     writer.write_all(&data).await
+}
+
+#[derive(Debug)]
+pub struct SocksV5Response {
+    pub status: SocksV5RequestStatus,
+    pub host: SocksV5Host,
+    pub port: u16,
+}
+
+pub type SocksV5ResponseResult = Result<SocksV5Response, SocksV5RequestError>;
+
+/// Reads and parses a SOCKSv5 command response message.
+///
+/// Depending on the data (in case of parsing errors),
+/// this function may not consume the whole response from the server.
+///
+/// # Errors
+///
+/// If reading from `reader` fails, including if a premature EOF is encountered,
+/// this function will return the I/O error (wrapped in `SocksV5RequestError::Io`).
+///
+/// If the first byte read from `reader` is not `05`, as required by the SOCKSv5 specification,
+/// then this function will return `SocksV5RequestError::InvalidVersion` with the actual "version number".
+///
+/// If the status byte or the address type byte are not from the respective lists in the specification,
+/// then this function will return `SocksV5RequestError::InvalidRequest`
+/// with a human-readable description of the error.
+pub async fn read_request_status<Reader>(mut reader: Reader) -> SocksV5ResponseResult
+where
+    Reader: AsyncRead + Unpin,
+{
+    let mut buf = [0u8; 2];
+
+    reader.read_exact(&mut buf[0..1]).await?;
+    if buf[0] != SocksVersion::V5.to_u8() {
+        return Err(SocksV5RequestError::InvalidVersion(buf[0]));
+    }
+
+    reader.read_exact(&mut buf[0..1]).await?;
+    let status = SocksV5RequestStatus::from_u8(buf[0]).ok_or_else(|| {
+        SocksV5RequestError::InvalidRequest(format!("invalid status {:02X}", buf[0]))
+    })?;
+
+    reader.read_exact(&mut buf).await?;
+    // ignore a reserved octet, use the following one
+    let atyp = SocksV5AddressType::from_u8(buf[1]).ok_or_else(|| {
+        SocksV5RequestError::InvalidRequest(format!(
+            "invalid address type {:02X}, expected {:02X} (IP V4), {:02X} (DOMAINNAME), or {:02X} (IP V6)",
+            buf[1],
+            SocksV5AddressType::Ipv4.to_u8(),
+            SocksV5AddressType::Domain.to_u8(),
+            SocksV5AddressType::Ipv6.to_u8(),
+        ))
+    })?;
+
+    let host = match atyp {
+        SocksV5AddressType::Ipv4 => {
+            let mut host = [0u8; 4];
+            reader.read_exact(&mut host).await?;
+            SocksV5Host::Ipv4(host)
+        }
+        SocksV5AddressType::Ipv6 => {
+            let mut host = [0u8; 16];
+            reader.read_exact(&mut host).await?;
+            SocksV5Host::Ipv6(host)
+        }
+        SocksV5AddressType::Domain => {
+            reader.read_exact(&mut buf[0..1]).await?;
+            let mut domain = vec![0u8; buf[0] as usize];
+            reader.read_exact(&mut domain).await?;
+            SocksV5Host::Domain(domain)
+        }
+    };
+
+    reader.read_exact(&mut buf).await?;
+    let port = NetworkEndian::read_u16(&buf);
+
+    Ok(SocksV5Response { status, port, host })
 }
 
 pub async fn write_request_status<Writer>(
