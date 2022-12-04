@@ -70,6 +70,36 @@ where
     Ok(SocksV5Handshake { methods })
 }
 
+/// Writes a SOCKSv5 "version identifier/method selection message",
+/// requesting the specified authentication methods.
+///
+/// The methods are added to the request as they are returned by the supplied iterator;
+/// no ordering or deduplication is performed. However, if `methods` returns more than 255 values,
+/// this function will silently truncate the list to 255 elements (the maximum allowed by the spec).
+///
+/// # Errors
+///
+/// If writing to `writer` fails, this function will return the I/O error.
+///
+/// # Panics
+///
+/// If the list of auth methods is empty. The SOCKSv5 specification requires at least one method to be specified.
+pub async fn write_handshake<Writer, Methods>(
+    mut writer: Writer,
+    methods: Methods,
+) -> std::io::Result<()>
+where
+    Writer: AsyncWrite + Unpin,
+    Methods: IntoIterator<Item = SocksV5AuthMethod>,
+{
+    let mut data = vec![SocksVersion::V5.to_u8(), 0u8];
+    data.extend(methods.into_iter().take(255).map(|m| m.to_u8()));
+    let method_count = (data.len() - 2) as u8;
+    assert!(method_count > 0, "must specify at least one auth method");
+    data[1] = method_count;
+    writer.write_all(&data).await
+}
+
 pub async fn write_auth_method<Writer>(
     mut writer: Writer,
     status: SocksV5AuthMethod,
