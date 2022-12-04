@@ -124,7 +124,7 @@ where
     let mut buf = [0u8; 8];
     buf[1] = status.to_u8();
     BigEndian::write_u16(&mut buf[2..4], port);
-    buf[4..8].clone_from_slice(&host);
+    buf[4..8].copy_from_slice(&host);
     writer.write_all(&buf).await?;
     Ok(())
 }
