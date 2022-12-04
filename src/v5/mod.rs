@@ -1,4 +1,4 @@
-use byteorder::{BigEndian, ByteOrder};
+use byteorder::{ByteOrder, NetworkEndian};
 #[cfg(not(feature = "tokio"))]
 use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use thiserror::Error;
@@ -234,13 +234,71 @@ where
 
     let mut port = [0u8; 2];
     reader.read_exact(&mut port).await?;
-    let port = BigEndian::read_u16(&port);
+    let port = NetworkEndian::read_u16(&port);
 
     Ok(SocksV5Request {
         command,
         port,
         host,
     })
+}
+
+/// Writes a SOCKSv5 request with the specified command, host and port.
+///
+/// # Errors
+///
+/// If writing to `writer` fails, this function will return the I/O error.
+///
+/// # Panics
+///
+/// If `host` is a domain name, the length of which is greater than 255 bytes.
+/// The SOCKSv5 specification leaves only a single octet for encoding the domain name length,
+/// so a target longer than 255 bytes cannot be properly encoded.
+pub async fn write_request<Writer>(
+    mut writer: Writer,
+    command: SocksV5Command,
+    host: SocksV5Host,
+    port: u16,
+) -> std::io::Result<()>
+where
+    Writer: AsyncWrite + Unpin,
+{
+    let mut data = Vec::<u8>::with_capacity(
+        6 + match &host {
+            SocksV5Host::Domain(domain) => {
+                assert!(
+                    domain.len() <= 256,
+                    "domain name must be shorter than 256 bytes"
+                );
+                1 + domain.len()
+            }
+            SocksV5Host::Ipv4(_) => 4,
+            SocksV5Host::Ipv6(_) => 16,
+        },
+    );
+    data.push(SocksVersion::V5.to_u8());
+    data.push(command.to_u8());
+    data.push(0u8); // reserved bits in SOCKSv5
+    match &host {
+        SocksV5Host::Domain(domain) => {
+            data.push(SocksV5AddressType::Domain.to_u8());
+            data.push(domain.len() as u8);
+            data.extend_from_slice(domain);
+        }
+        SocksV5Host::Ipv4(octets) => {
+            data.push(SocksV5AddressType::Ipv4.to_u8());
+            data.extend_from_slice(octets);
+        }
+        SocksV5Host::Ipv6(octets) => {
+            data.push(SocksV5AddressType::Ipv6.to_u8());
+            data.extend_from_slice(octets);
+        }
+    }
+    let port_start = data.len();
+    data.extend_from_slice(b"\0\0");
+    NetworkEndian::write_u16(&mut data[port_start..], port);
+
+    writer.write_all(&data).await
 }
 
 pub async fn write_request_status<Writer>(
@@ -280,7 +338,7 @@ where
             5 + d.len()
         }
     };
-    BigEndian::write_u16(&mut buf[idx..idx + 2], port);
+    NetworkEndian::write_u16(&mut buf[idx..idx + 2], port);
     writer.write_all(&buf).await?;
     Ok(())
 }
