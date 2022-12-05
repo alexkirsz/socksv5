@@ -1,4 +1,4 @@
-use byteorder::{BigEndian, ByteOrder};
+use byteorder::{ByteOrder, NetworkEndian};
 #[cfg(not(feature = "tokio"))]
 use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use thiserror::Error;
@@ -70,6 +70,66 @@ where
     Ok(SocksV5Handshake { methods })
 }
 
+/// Writes a SOCKSv5 "version identifier/method selection message",
+/// requesting the specified authentication methods.
+///
+/// The methods are added to the request as they are returned by the supplied iterator;
+/// no ordering or deduplication is performed. However, if `methods` returns more than 255 values,
+/// this function will silently truncate the list to 255 elements (the maximum allowed by the spec).
+///
+/// # Errors
+///
+/// If writing to `writer` fails, this function will return the I/O error.
+///
+/// # Panics
+///
+/// If the list of auth methods is empty. The SOCKSv5 specification requires at least one method to be specified.
+pub async fn write_handshake<Writer, Methods>(
+    mut writer: Writer,
+    methods: Methods,
+) -> std::io::Result<()>
+where
+    Writer: AsyncWrite + Unpin,
+    Methods: IntoIterator<Item = SocksV5AuthMethod>,
+{
+    let mut data = vec![SocksVersion::V5.to_u8(), 0u8];
+    data.extend(methods.into_iter().take(255).map(|m| m.to_u8()));
+    let method_count = (data.len() - 2) as u8;
+    assert!(method_count > 0, "must specify at least one auth method");
+    data[1] = method_count;
+    writer.write_all(&data).await
+}
+
+pub type SocksV5AuthMethodResult = Result<SocksV5AuthMethod, SocksV5HandshakeError>;
+
+/// Reads a SOCKSv5 "METHOD selection message", verifying the protocol version
+/// and returning the authentication method selected by the server.
+///
+/// This function consumes from 0 to 2 bytes from `reader`, depending on the data and errors.
+/// When the result is successful, it will have consumed exactly 2 bytes.
+///
+/// # Errors
+///
+/// If reading from `reader` fails, including if a premature EOF is encountered,
+/// this function will return the I/O error (wrapped in `SocksV5HandshakeError::Io`).
+///
+/// If the first byte read from `reader` is not `05`, as required by the SOCKSv5 specification,
+/// then this function will return `SocksV5HandshakeError::InvalidVersion` with the actual "version number".
+pub async fn read_auth_method<Reader>(mut reader: Reader) -> SocksV5AuthMethodResult
+where
+    Reader: AsyncRead + Unpin,
+{
+    let mut data = [0u8];
+    // read protocol version
+    reader.read_exact(&mut data).await?;
+    if data[0] != SocksVersion::V5.to_u8() {
+        return Err(SocksV5HandshakeError::InvalidVersion(data[0]));
+    }
+    // read selected auth method
+    reader.read_exact(&mut data).await?;
+    Ok(SocksV5AuthMethod::from_u8(data[0]))
+}
+
 pub async fn write_auth_method<Writer>(
     mut writer: Writer,
     status: SocksV5AuthMethod,
@@ -129,7 +189,7 @@ where
     reader.read_exact(&mut command).await?;
     let command = SocksV5Command::from_u8(command[0]).ok_or_else(|| {
         SocksV5RequestError::InvalidRequest(format!(
-            "invalid command {:02X}, expected {:02X} (CONNECT), {:02X} (BIND), or  {:02X} (UDP ASSOCIATE)",
+            "invalid command {:02X}, expected {:02X} (CONNECT), {:02X} (BIND), or {:02X} (UDP ASSOCIATE)",
             command[0],
             SocksV5Command::Bind.to_u8(),
             SocksV5Command::Connect.to_u8(),
@@ -174,13 +234,149 @@ where
 
     let mut port = [0u8; 2];
     reader.read_exact(&mut port).await?;
-    let port = BigEndian::read_u16(&port);
+    let port = NetworkEndian::read_u16(&port);
 
     Ok(SocksV5Request {
         command,
         port,
         host,
     })
+}
+
+/// Writes a SOCKSv5 request with the specified command, host and port.
+///
+/// # Errors
+///
+/// If writing to `writer` fails, this function will return the I/O error.
+///
+/// # Panics
+///
+/// If `host` is a domain name, the length of which is greater than 255 bytes.
+/// The SOCKSv5 specification leaves only a single octet for encoding the domain name length,
+/// so a target longer than 255 bytes cannot be properly encoded.
+pub async fn write_request<Writer>(
+    mut writer: Writer,
+    command: SocksV5Command,
+    host: SocksV5Host,
+    port: u16,
+) -> std::io::Result<()>
+where
+    Writer: AsyncWrite + Unpin,
+{
+    let mut data = Vec::<u8>::with_capacity(
+        6 + match &host {
+            SocksV5Host::Domain(domain) => {
+                assert!(
+                    domain.len() <= 256,
+                    "domain name must be shorter than 256 bytes"
+                );
+                1 + domain.len()
+            }
+            SocksV5Host::Ipv4(_) => 4,
+            SocksV5Host::Ipv6(_) => 16,
+        },
+    );
+    data.push(SocksVersion::V5.to_u8());
+    data.push(command.to_u8());
+    data.push(0u8); // reserved bits in SOCKSv5
+    match &host {
+        SocksV5Host::Domain(domain) => {
+            data.push(SocksV5AddressType::Domain.to_u8());
+            data.push(domain.len() as u8);
+            data.extend_from_slice(domain);
+        }
+        SocksV5Host::Ipv4(octets) => {
+            data.push(SocksV5AddressType::Ipv4.to_u8());
+            data.extend_from_slice(octets);
+        }
+        SocksV5Host::Ipv6(octets) => {
+            data.push(SocksV5AddressType::Ipv6.to_u8());
+            data.extend_from_slice(octets);
+        }
+    }
+    let port_start = data.len();
+    data.extend_from_slice(b"\0\0");
+    NetworkEndian::write_u16(&mut data[port_start..], port);
+
+    writer.write_all(&data).await
+}
+
+#[derive(Debug)]
+pub struct SocksV5Response {
+    pub status: SocksV5RequestStatus,
+    pub host: SocksV5Host,
+    pub port: u16,
+}
+
+pub type SocksV5ResponseResult = Result<SocksV5Response, SocksV5RequestError>;
+
+/// Reads and parses a SOCKSv5 command response message.
+///
+/// Depending on the data (in case of parsing errors),
+/// this function may not consume the whole response from the server.
+///
+/// # Errors
+///
+/// If reading from `reader` fails, including if a premature EOF is encountered,
+/// this function will return the I/O error (wrapped in `SocksV5RequestError::Io`).
+///
+/// If the first byte read from `reader` is not `05`, as required by the SOCKSv5 specification,
+/// then this function will return `SocksV5RequestError::InvalidVersion` with the actual "version number".
+///
+/// If the status byte or the address type byte are not from the respective lists in the specification,
+/// then this function will return `SocksV5RequestError::InvalidRequest`
+/// with a human-readable description of the error.
+pub async fn read_request_status<Reader>(mut reader: Reader) -> SocksV5ResponseResult
+where
+    Reader: AsyncRead + Unpin,
+{
+    let mut buf = [0u8; 2];
+
+    reader.read_exact(&mut buf[0..1]).await?;
+    if buf[0] != SocksVersion::V5.to_u8() {
+        return Err(SocksV5RequestError::InvalidVersion(buf[0]));
+    }
+
+    reader.read_exact(&mut buf[0..1]).await?;
+    let status = SocksV5RequestStatus::from_u8(buf[0]).ok_or_else(|| {
+        SocksV5RequestError::InvalidRequest(format!("invalid status {:02X}", buf[0]))
+    })?;
+
+    reader.read_exact(&mut buf).await?;
+    // ignore a reserved octet, use the following one
+    let atyp = SocksV5AddressType::from_u8(buf[1]).ok_or_else(|| {
+        SocksV5RequestError::InvalidRequest(format!(
+            "invalid address type {:02X}, expected {:02X} (IP V4), {:02X} (DOMAINNAME), or {:02X} (IP V6)",
+            buf[1],
+            SocksV5AddressType::Ipv4.to_u8(),
+            SocksV5AddressType::Domain.to_u8(),
+            SocksV5AddressType::Ipv6.to_u8(),
+        ))
+    })?;
+
+    let host = match atyp {
+        SocksV5AddressType::Ipv4 => {
+            let mut host = [0u8; 4];
+            reader.read_exact(&mut host).await?;
+            SocksV5Host::Ipv4(host)
+        }
+        SocksV5AddressType::Ipv6 => {
+            let mut host = [0u8; 16];
+            reader.read_exact(&mut host).await?;
+            SocksV5Host::Ipv6(host)
+        }
+        SocksV5AddressType::Domain => {
+            reader.read_exact(&mut buf[0..1]).await?;
+            let mut domain = vec![0u8; buf[0] as usize];
+            reader.read_exact(&mut domain).await?;
+            SocksV5Host::Domain(domain)
+        }
+    };
+
+    reader.read_exact(&mut buf).await?;
+    let port = NetworkEndian::read_u16(&buf);
+
+    Ok(SocksV5Response { status, port, host })
 }
 
 pub async fn write_request_status<Writer>(
@@ -220,7 +416,83 @@ where
             5 + d.len()
         }
     };
-    BigEndian::write_u16(&mut buf[idx..idx + 2], port);
+    NetworkEndian::write_u16(&mut buf[idx..idx + 2], port);
     writer.write_all(&buf).await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use futures::executor::block_on;
+
+    use super::*;
+
+    #[test]
+    fn write_handshake_good() {
+        let mut buf = Vec::<u8>::new();
+        block_on(write_handshake(&mut buf, [SocksV5AuthMethod::Noauth])).unwrap();
+        assert_eq!(buf, &[0x05, 0x01, 0x00]);
+    }
+
+    #[test]
+    fn read_auth_method_good() {
+        assert_eq!(
+            block_on(read_auth_method([0x05u8, 0x00].as_slice())).unwrap(),
+            SocksV5AuthMethod::Noauth
+        );
+    }
+
+    #[test]
+    fn write_request_ipv4() {
+        let mut buf = Vec::<u8>::new();
+        block_on(write_request(
+            &mut buf,
+            SocksV5Command::Connect,
+            SocksV5Host::Ipv4([127, 0, 0, 1]),
+            1080,
+        ))
+        .unwrap();
+        assert_eq!(buf, &[5, 1, 0, 1, 127, 0, 0, 1, 4, 56]);
+    }
+
+    #[test]
+    fn write_request_ipv6() {
+        let mut buf = Vec::<u8>::new();
+        block_on(write_request(
+            &mut buf,
+            SocksV5Command::Connect,
+            SocksV5Host::Ipv6([1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6]),
+            1080,
+        ))
+        .unwrap();
+        assert_eq!(
+            buf,
+            &[5, 1, 0, 4, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 4, 56]
+        );
+    }
+
+    #[test]
+    fn write_request_domain() {
+        let mut buf = Vec::<u8>::new();
+        block_on(write_request(
+            &mut buf,
+            SocksV5Command::Connect,
+            SocksV5Host::Domain("A".into()),
+            1080,
+        ))
+        .unwrap();
+        assert_eq!(buf, &[5, 1, 0, 3, 1, 65, 4, 56]);
+    }
+
+    #[test]
+    fn read_request_status_good() {
+        let data = [5, 0, 0, 1, 127, 0, 0, 1, 4, 56];
+        let response = block_on(read_request_status(data.as_slice())).unwrap();
+        assert_eq!(response.status, SocksV5RequestStatus::Success);
+        match response.host {
+            SocksV5Host::Ipv4(ip) => assert_eq!(ip, [127, 0, 0, 1]),
+            _ => panic!("parsed host was not IPv4 as expected"),
+        }
+        assert_eq!(response.port, 1080);
+    }
 }
