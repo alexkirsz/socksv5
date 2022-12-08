@@ -1,6 +1,6 @@
 [package]
 name = "socksv5"
-version = "0.3.1-alpha.0"
+version = "0.3.1"
 authors = ["Alexandre Kirszenberg <alex@kirszenberg.com>"]
 edition = "2018"
 description = "SOCKS v4a and v5 basic building blocks to build your own async SOCKS application"
