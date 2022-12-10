@@ -5,9 +5,11 @@ use thiserror::Error;
 #[cfg(feature = "tokio")]
 use tokio_compat::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
+mod hosts;
 mod types;
 
 use crate::SocksVersion;
+pub use hosts::*;
 pub use types::*;
 
 #[derive(Debug, Error)]
@@ -155,13 +157,6 @@ pub enum SocksV5RequestError {
         #[source]
         std::io::Error,
     ),
-}
-
-#[derive(Debug)]
-pub enum SocksV5Host {
-    Domain(Vec<u8>),
-    Ipv4([u8; 4]),
-    Ipv6([u8; 16]),
 }
 
 #[derive(Debug)]
