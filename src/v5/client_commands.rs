@@ -1,10 +1,7 @@
 use byteorder::{ByteOrder, NetworkEndian};
-#[cfg(not(feature = "tokio"))]
-use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use thiserror::Error;
-#[cfg(feature = "tokio")]
-use tokio_compat::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
+use crate::io::*;
 use crate::v5::{
     SocksV5AddressType, SocksV5Command, SocksV5Host, SocksV5RequestError, SocksV5RequestStatus,
 };

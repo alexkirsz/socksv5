@@ -1,11 +1,16 @@
-#[cfg(not(feature = "tokio"))]
-use futures::io::{AsyncRead, AsyncReadExt};
 use thiserror::Error;
-#[cfg(feature = "tokio")]
-use tokio_compat::io::{AsyncRead, AsyncReadExt};
+
+use crate::io::*;
 
 pub mod v4;
 pub mod v5;
+
+pub(crate) mod io {
+    #[cfg(not(feature = "tokio"))]
+    pub use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+    #[cfg(feature = "tokio")]
+    pub use tokio_compat::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+}
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum SocksVersion {

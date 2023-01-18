@@ -1,14 +1,12 @@
 use byteorder::{BigEndian, ByteOrder};
-#[cfg(not(feature = "tokio"))]
-use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use thiserror::Error;
-#[cfg(feature = "tokio")]
-use tokio_compat::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+
+pub use types::*;
+
+use crate::io::*;
+use crate::SocksVersion;
 
 mod types;
-
-use crate::SocksVersion;
-pub use types::*;
 
 #[derive(Debug, Error)]
 pub enum SocksV4RequestError {

@@ -1,20 +1,18 @@
 use byteorder::{ByteOrder, NetworkEndian};
-#[cfg(not(feature = "tokio"))]
-use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use thiserror::Error;
-#[cfg(feature = "tokio")]
-use tokio_compat::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+
+pub use client_commands::*;
+pub use handshake::*;
+pub use hosts::*;
+pub use types::*;
+
+use crate::io::*;
+use crate::SocksVersion;
 
 mod client_commands;
 mod handshake;
 mod hosts;
 mod types;
-
-use crate::SocksVersion;
-pub use client_commands::*;
-pub use handshake::*;
-pub use hosts::*;
-pub use types::*;
 
 #[derive(Debug, Error)]
 pub enum SocksV5RequestError {

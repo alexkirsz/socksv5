@@ -1,9 +1,6 @@
-#[cfg(not(feature = "tokio"))]
-use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use thiserror::Error;
-#[cfg(feature = "tokio")]
-use tokio_compat::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
+use crate::io::*;
 use crate::v5::SocksV5AuthMethod;
 use crate::SocksVersion;
 
