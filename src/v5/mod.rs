@@ -76,25 +76,7 @@ where
         ))
     })?;
 
-    let host = match atyp {
-        SocksV5AddressType::Ipv4 => {
-            let mut host = [0u8; 4];
-            reader.read_exact(&mut host).await?;
-            SocksV5Host::Ipv4(host)
-        }
-        SocksV5AddressType::Ipv6 => {
-            let mut host = [0u8; 16];
-            reader.read_exact(&mut host).await?;
-            SocksV5Host::Ipv6(host)
-        }
-        SocksV5AddressType::Domain => {
-            let mut domain_length = [0u8];
-            reader.read_exact(&mut domain_length).await?;
-            let mut domain = vec![0u8; domain_length[0] as usize];
-            reader.read_exact(&mut domain).await?;
-            SocksV5Host::Domain(domain)
-        }
-    };
+    let host = SocksV5Host::read(&mut reader, atyp).await?;
 
     let mut port = [0u8; 2];
     reader.read_exact(&mut port).await?;

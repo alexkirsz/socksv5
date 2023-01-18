@@ -1,6 +1,9 @@
 use std::convert::TryFrom;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
+use crate::io::*;
+use crate::v5::SocksV5AddressType;
+
 #[derive(Clone, Debug)]
 pub enum SocksV5Host {
     Domain(Vec<u8>),
@@ -30,6 +33,34 @@ impl SocksV5Host {
             SocksV5Host::Domain(domain) => 1 + domain.len(),
             SocksV5Host::Ipv4(_) => 4,
             SocksV5Host::Ipv6(_) => 16,
+        }
+    }
+
+    pub(crate) async fn read<Reader>(
+        mut reader: Reader,
+        addr_type: SocksV5AddressType,
+    ) -> std::io::Result<SocksV5Host>
+    where
+        Reader: AsyncRead + Unpin,
+    {
+        match addr_type {
+            SocksV5AddressType::Ipv4 => {
+                let mut host = [0u8; 4];
+                reader.read_exact(&mut host).await?;
+                Ok(host.into())
+            }
+            SocksV5AddressType::Ipv6 => {
+                let mut host = [0u8; 16];
+                reader.read_exact(&mut host).await?;
+                Ok(host.into())
+            }
+            SocksV5AddressType::Domain => {
+                let mut buf = [0u8];
+                reader.read_exact(&mut buf).await?;
+                let mut domain = vec![0u8; buf[0] as usize];
+                reader.read_exact(&mut domain).await?;
+                Ok(domain.into())
+            }
         }
     }
 }
