@@ -18,7 +18,7 @@ use crate::SocksVersion;
 ///
 /// # Panics
 ///
-/// If `host` is a domain name, the length of which is greater than 255 bytes.
+/// If `host` is a domain name, and its length is greater than 255 bytes.
 /// The SOCKSv5 specification leaves only a single octet for encoding the domain name length,
 /// so a target longer than 255 bytes cannot be properly encoded.
 pub async fn write_request<Writer>(
@@ -30,24 +30,16 @@ pub async fn write_request<Writer>(
 where
     Writer: AsyncWrite + Unpin,
 {
-    let mut data = Vec::<u8>::with_capacity(
-        6 + match &host {
-            SocksV5Host::Domain(domain) => {
-                assert!(
-                    domain.len() <= 256,
-                    "domain name must be shorter than 256 bytes"
-                );
-                1 + domain.len()
-            }
-            SocksV5Host::Ipv4(_) => 4,
-            SocksV5Host::Ipv6(_) => 16,
-        },
-    );
+    let mut data = Vec::<u8>::with_capacity(6 + host.repr_len());
     data.push(SocksVersion::V5.to_u8());
     data.push(command.to_u8());
     data.push(0u8); // reserved bits in SOCKSv5
     match &host {
         SocksV5Host::Domain(domain) => {
+            assert!(
+                domain.len() < 256,
+                "domain name must be shorter than 256 bytes"
+            );
             data.push(SocksV5AddressType::Domain.to_u8());
             data.push(domain.len() as u8);
             data.extend_from_slice(domain);

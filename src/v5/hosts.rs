@@ -24,6 +24,14 @@ impl SocksV5Host {
     pub fn is_domain(&self) -> bool {
         matches!(self, SocksV5Host::Domain(_))
     }
+
+    pub(crate) fn repr_len(&self) -> usize {
+        match self {
+            SocksV5Host::Domain(domain) => 1 + domain.len(),
+            SocksV5Host::Ipv4(_) => 4,
+            SocksV5Host::Ipv6(_) => 16,
+        }
+    }
 }
 
 impl From<[u8; 4]> for SocksV5Host {

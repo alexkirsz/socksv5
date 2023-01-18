@@ -118,14 +118,7 @@ pub async fn write_request_status<Writer>(
 where
     Writer: AsyncWrite + Unpin,
 {
-    let mut buf = vec![
-        0u8;
-        6 + match &host {
-            SocksV5Host::Ipv4(_) => 4,
-            SocksV5Host::Ipv6(_) => 16,
-            SocksV5Host::Domain(d) => 1 + d.len(),
-        }
-    ];
+    let mut buf = vec![0u8; 6 + host.repr_len()];
     buf[0] = SocksVersion::V5.to_u8();
     buf[1] = status.to_u8();
     let idx = match &host {
@@ -147,8 +140,7 @@ where
         }
     };
     NetworkEndian::write_u16(&mut buf[idx..idx + 2], port);
-    writer.write_all(&buf).await?;
-    Ok(())
+    writer.write_all(&buf).await
 }
 
 #[cfg(test)]
