@@ -50,6 +50,5 @@ where
 {
     let mut version = [0u8];
     stream.read_exact(&mut version).await?;
-    Ok(SocksVersion::from_u8(version[0])
-        .ok_or_else(|| SocksVersionError::InvalidVersion(version[0]))?)
+    SocksVersion::from_u8(version[0]).ok_or_else(|| SocksVersionError::InvalidVersion(version[0]))
 }
