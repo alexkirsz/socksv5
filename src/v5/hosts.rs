@@ -101,7 +101,7 @@ impl<'a> TryFrom<&'a SocksV5Host> for Ipv4Addr {
 
     fn try_from(host: &'a SocksV5Host) -> Result<Self, Self::Error> {
         match host {
-            SocksV5Host::Ipv4(octets) => Ok(octets.clone().into()),
+            SocksV5Host::Ipv4(octets) => Ok((*octets).into()),
             _ => Err(()),
         }
     }
@@ -123,7 +123,7 @@ impl<'a> TryFrom<&'a SocksV5Host> for Ipv6Addr {
 
     fn try_from(host: &'a SocksV5Host) -> Result<Self, Self::Error> {
         match host {
-            SocksV5Host::Ipv6(octets) => Ok(octets.clone().into()),
+            SocksV5Host::Ipv6(octets) => Ok((*octets).into()),
             _ => Err(()),
         }
     }
@@ -146,8 +146,8 @@ impl<'a> TryFrom<&'a SocksV5Host> for IpAddr {
 
     fn try_from(host: &'a SocksV5Host) -> Result<Self, Self::Error> {
         match host {
-            SocksV5Host::Ipv4(octets) => Ok(octets.clone().into()),
-            SocksV5Host::Ipv6(octets) => Ok(octets.clone().into()),
+            SocksV5Host::Ipv4(octets) => Ok((*octets).into()),
+            SocksV5Host::Ipv6(octets) => Ok((*octets).into()),
             _ => Err(()),
         }
     }
