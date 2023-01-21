@@ -67,22 +67,9 @@ where
                             return Ok(server_socket);
                         }
                         Err(e) => {
-                            // Unix error codes.
-                            let status = match e.raw_os_error() {
-                                // ENETUNREACH
-                                Some(101) => socksv5::v5::SocksV5RequestStatus::NetworkUnreachable,
-                                // ETIMEDOUT
-                                Some(110) => socksv5::v5::SocksV5RequestStatus::TtlExpired,
-                                // ECONNREFUSED
-                                Some(111) => socksv5::v5::SocksV5RequestStatus::ConnectionRefused,
-                                // EHOSTUNREACH
-                                Some(113) => socksv5::v5::SocksV5RequestStatus::HostUnreachable,
-                                // Unhandled error code
-                                _ => socksv5::v5::SocksV5RequestStatus::ServerFailure,
-                            };
                             socksv5::v5::write_request_status(
                                 &mut writer,
-                                status,
+                                socksv5::v5::SocksV5RequestStatus::from_io_error(e),
                                 socksv5::v5::SocksV5Host::Ipv4([0, 0, 0, 0]),
                                 0,
                             )
