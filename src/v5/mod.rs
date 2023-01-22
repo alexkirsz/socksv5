@@ -1,20 +1,18 @@
 use byteorder::{ByteOrder, NetworkEndian};
-#[cfg(not(feature = "tokio"))]
-use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use thiserror::Error;
-#[cfg(feature = "tokio")]
-use tokio_compat::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+
+pub use client_commands::*;
+pub use handshake::*;
+pub use hosts::*;
+pub use types::*;
+
+use crate::io::*;
+use crate::SocksVersion;
 
 mod client_commands;
 mod handshake;
 mod hosts;
 mod types;
-
-use crate::SocksVersion;
-pub use client_commands::*;
-pub use handshake::*;
-pub use hosts::*;
-pub use types::*;
 
 #[derive(Debug, Error)]
 pub enum SocksV5RequestError {
@@ -78,25 +76,7 @@ where
         ))
     })?;
 
-    let host = match atyp {
-        SocksV5AddressType::Ipv4 => {
-            let mut host = [0u8; 4];
-            reader.read_exact(&mut host).await?;
-            SocksV5Host::Ipv4(host)
-        }
-        SocksV5AddressType::Ipv6 => {
-            let mut host = [0u8; 16];
-            reader.read_exact(&mut host).await?;
-            SocksV5Host::Ipv6(host)
-        }
-        SocksV5AddressType::Domain => {
-            let mut domain_length = [0u8];
-            reader.read_exact(&mut domain_length).await?;
-            let mut domain = vec![0u8; domain_length[0] as usize];
-            reader.read_exact(&mut domain).await?;
-            SocksV5Host::Domain(domain)
-        }
-    };
+    let host = SocksV5Host::read(&mut reader, atyp).await?;
 
     let mut port = [0u8; 2];
     reader.read_exact(&mut port).await?;
@@ -118,14 +98,7 @@ pub async fn write_request_status<Writer>(
 where
     Writer: AsyncWrite + Unpin,
 {
-    let mut buf = vec![
-        0u8;
-        6 + match &host {
-            SocksV5Host::Ipv4(_) => 4,
-            SocksV5Host::Ipv6(_) => 16,
-            SocksV5Host::Domain(d) => 1 + d.len(),
-        }
-    ];
+    let mut buf = vec![0u8; 6 + host.repr_len()];
     buf[0] = SocksVersion::V5.to_u8();
     buf[1] = status.to_u8();
     let idx = match &host {
@@ -147,8 +120,7 @@ where
         }
     };
     NetworkEndian::write_u16(&mut buf[idx..idx + 2], port);
-    writer.write_all(&buf).await?;
-    Ok(())
+    writer.write_all(&buf).await
 }
 
 #[cfg(test)]
