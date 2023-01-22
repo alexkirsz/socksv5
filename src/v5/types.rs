@@ -128,20 +128,20 @@ impl SocksV5RequestStatus {
     pub fn from_io_error(e: std::io::Error) -> SocksV5RequestStatus {
         match e.raw_os_error() {
             // ENETUNREACH
-            Some(101) => socksv5::v5::SocksV5RequestStatus::NetworkUnreachable,
+            Some(101) => SocksV5RequestStatus::NetworkUnreachable,
             // ETIMEDOUT
-            Some(110) => socksv5::v5::SocksV5RequestStatus::TtlExpired,
+            Some(110) => SocksV5RequestStatus::TtlExpired,
             // ECONNREFUSED
-            Some(111) => socksv5::v5::SocksV5RequestStatus::ConnectionRefused,
+            Some(111) => SocksV5RequestStatus::ConnectionRefused,
             // EHOSTUNREACH
-            Some(113) => socksv5::v5::SocksV5RequestStatus::HostUnreachable,
+            Some(113) => SocksV5RequestStatus::HostUnreachable,
             // Unhandled error code
-            _ => socksv5::v5::SocksV5RequestStatus::ServerFailure,
+            _ => SocksV5RequestStatus::ServerFailure,
         }
     }
 
     #[cfg(not(unix))]
     pub fn from_io_error(e: std::io::Error) -> SocksV5RequestStatus {
-        socksv5::v5::SocksV5RequestStatus::ServerFailure
+        SocksV5RequestStatus::ServerFailure
     }
 }
