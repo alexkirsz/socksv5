@@ -1,11 +1,12 @@
 use byteorder::{ByteOrder, NetworkEndian};
+use std::future::Future;
 use thiserror::Error;
 
 use crate::io::*;
+use crate::SocksVersion;
 use crate::v5::{
     SocksV5AddressType, SocksV5Command, SocksV5Host, SocksV5RequestError, SocksV5RequestStatus,
 };
-use crate::SocksVersion;
 
 /// Writes a SOCKSv5 request with the specified command, host and port.
 ///
@@ -183,6 +184,40 @@ where
     }
 
     Ok((stream, response.host, response.port))
+}
+
+pub async fn request_bind<Stream, Host>(
+    mut stream: Stream,
+    host: Host,
+    port: u16,
+) -> Result<
+    (
+        impl Future<Output = Result<(Stream, SocksV5Host, u16), SocksV5ConnectError>>,
+        SocksV5Host,
+        u16,
+    ),
+    SocksV5ConnectError,
+>
+where
+    Stream: AsyncRead + AsyncWrite + Unpin,
+    Host: Into<SocksV5Host>,
+{
+    write_request(&mut stream, SocksV5Command::Bind, host.into(), port).await?;
+
+    let response1 = read_request_status(&mut stream).await?;
+    if response1.status != SocksV5RequestStatus::Success {
+        return Err(SocksV5ConnectError::ServerError(response1.status));
+    }
+
+    let accepted_fut = async move {
+        let response2 = read_request_status(&mut stream).await?;
+        if response2.status != SocksV5RequestStatus::Success {
+            return Err(SocksV5ConnectError::ServerError(response2.status));
+        }
+        Ok((stream, response2.host, response2.port))
+    };
+
+    Ok((accepted_fut, response1.host, response1.port))
 }
 
 #[cfg(test)]
