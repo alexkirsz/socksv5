@@ -1,4 +1,5 @@
 use byteorder::{ByteOrder, NetworkEndian};
+use std::future::Future;
 use thiserror::Error;
 
 use crate::io::*;
@@ -183,6 +184,62 @@ where
     }
 
     Ok((stream, response.host, response.port))
+}
+
+/// As a client, send a BIND request to a stream and process the response.
+///
+/// # Returns
+///
+/// If the server accepts the command, this function returns a triple consisting of:
+/// - a future (that can be used to accept an incoming connection through the proxy);
+/// - as well as the host and port that the proxy is listening on.
+///
+/// Once an incoming connection to the proxy is made, that "accept" future will resolve into another triple:
+/// - a read-write stream,
+/// - as well as the host and port of the client that connected to the proxy.
+///
+/// The stream can then be used to communicate with the client.
+///
+/// # Errors
+///
+/// Errors can be returned from both this function and the "accept" future:
+/// - `Io` if either sending the request or receiving the response fails due to I/O error, including a premature EOF.
+/// - `InvalidVersion` if the server returns an unexpected version number.
+/// - `InvalidResponse` if the server's reply cannot be interpreted (because, for example, it uses
+/// an unsupported status code or address type).
+/// - `ServerError` if the server returns a non-success status.
+pub async fn request_bind<Stream, Host>(
+    mut stream: Stream,
+    host: Host,
+    port: u16,
+) -> Result<
+    (
+        impl Future<Output = Result<(Stream, SocksV5Host, u16), SocksV5ConnectError>>,
+        SocksV5Host,
+        u16,
+    ),
+    SocksV5ConnectError,
+>
+where
+    Stream: AsyncRead + AsyncWrite + Unpin,
+    Host: Into<SocksV5Host>,
+{
+    write_request(&mut stream, SocksV5Command::Bind, host.into(), port).await?;
+
+    let response1 = read_request_status(&mut stream).await?;
+    if response1.status != SocksV5RequestStatus::Success {
+        return Err(SocksV5ConnectError::ServerError(response1.status));
+    }
+
+    let accepted_fut = async move {
+        let response2 = read_request_status(&mut stream).await?;
+        if response2.status != SocksV5RequestStatus::Success {
+            return Err(SocksV5ConnectError::ServerError(response2.status));
+        }
+        Ok((stream, response2.host, response2.port))
+    };
+
+    Ok((accepted_fut, response1.host, response1.port))
 }
 
 #[cfg(test)]
