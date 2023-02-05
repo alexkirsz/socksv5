@@ -3,10 +3,10 @@ use std::future::Future;
 use thiserror::Error;
 
 use crate::io::*;
-use crate::SocksVersion;
 use crate::v5::{
     SocksV5AddressType, SocksV5Command, SocksV5Host, SocksV5RequestError, SocksV5RequestStatus,
 };
+use crate::SocksVersion;
 
 /// Writes a SOCKSv5 request with the specified command, host and port.
 ///
@@ -186,6 +186,28 @@ where
     Ok((stream, response.host, response.port))
 }
 
+/// As a client, send a BIND request to a stream and process the response.
+///
+/// # Returns
+///
+/// If the server accepts the command, this function returns a triple consisting of:
+/// - a future (that can be used to accept an incoming connection through the proxy);
+/// - as well as the host and port that the proxy is listening on.
+///
+/// Once an incoming connection to the proxy is made, that "accept" future will resolve into another triple:
+/// - a read-write stream,
+/// - as well as the host and port of the client that connected to the proxy.
+///
+/// The stream can then be used to communicate with the client.
+///
+/// # Errors
+///
+/// Errors can be returned from both this function and the "accept" future:
+/// - `Io` if either sending the request or receiving the response fails due to I/O error, including a premature EOF.
+/// - `InvalidVersion` if the server returns an unexpected version number.
+/// - `InvalidResponse` if the server's reply cannot be interpreted (because, for example, it uses
+/// an unsupported status code or address type).
+/// - `ServerError` if the server returns a non-success status.
 pub async fn request_bind<Stream, Host>(
     mut stream: Stream,
     host: Host,
