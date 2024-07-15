@@ -1,4 +1,4 @@
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SocksV4Command {
     Connect,
     Bind,
@@ -21,7 +21,7 @@ impl SocksV4Command {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SocksV4RequestStatus {
     Granted,
     /// Also known as Refused

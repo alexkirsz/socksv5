@@ -1,4 +1,4 @@
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SocksV5AuthMethod {
     Noauth,
     Gssapi,
@@ -29,7 +29,7 @@ impl SocksV5AuthMethod {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SocksV5Command {
     Connect,
     Bind,
@@ -55,7 +55,7 @@ impl SocksV5Command {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SocksV5AddressType {
     Ipv4,
     Domain,
@@ -81,7 +81,7 @@ impl SocksV5AddressType {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SocksV5RequestStatus {
     Success,
     ServerFailure,

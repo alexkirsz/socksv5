@@ -12,7 +12,7 @@ pub(crate) mod io {
     pub use tokio_compat::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SocksVersion {
     V4 = 0x04,
     V5 = 0x05,
